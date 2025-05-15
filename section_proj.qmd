@@ -1,0 +1,384 @@
+---
+title: "arakno test"
+format: html
+---
+
+```{r}
+library(tidyverse)
+
+root <- "C:/Users/Silkie Moth/Desktop/ucsb_stuff/homework/eds_213/section"
+
+# bug range change
+sample_data <- read_csv(here::here(root, "data", "bug_range_change", "data", "SampleData.csv"))
+plot <- read_csv(here::here(root, "data", "bug_range_change", "data", "PlotData.csv"))
+
+
+
+# big bee
+big_bee <- read_csv(here::here("data", "big_bee", "occurrences1.csv"))
+
+
+# leptraits
+butter_traits <- read_csv(here::here("data", "LepTraits-main", "LepTraits-main", "records", 'records.csv'))
+
+
+# butterfly survey
+complete_share <- read_csv("data/butterfly-data-paper-slim/butterfly-data-paper-slim/4_res/complete-share.csv")
+
+```
+
+```{r}
+# summary function
+table_smry <- function(df){
+  
+  print(paste0("nrows for ", deparse(substitute(df)), ": ", nrow(df)))
+  cat("-----------------\n\n")
+  
+  for (name in df %>% names()){
+    curr_col = name
+    
+    
+    print(paste0("num unique vals for ", curr_col, ": ", df[curr_col] %>% unique() %>% count() %>% as.numeric()))
+    print(paste0("num NAs for ", curr_col, ": ", df[curr_col] %>% is.na() %>% sum() %>% as.numeric()))
+    cat("------------------------\n")
+  }
+
+}
+```
+
+
+```{r}
+
+# bug range change data, call "bug range change"
+
+# will likely only need for broad insect classification
+sample_data_trim <- sample_data %>% 
+  
+  # select cols we care about
+  select(
+    Sample_ID,
+    DataSource_ID,
+    SamplingMethod,
+    Stratum, 
+    GroupInData
+)
+
+# will likely only need for lat longs and other plot parameter data
+plot_trim <- plot %>% 
+  
+  # rename, round, and average as necessary
+  mutate(
+    Latitude = round(Latitude),
+    Longitude = round(Longitude),
+    amt_cropland = (frcCrop_start + frcCrop_end)/2,
+    amt_urban = (frcUrban_start + frcUrban_end)/2,
+    amt_forest = (frcForest_start + frcForest_end)/2,
+    mean_temp_c = CRUmnC,
+    temp_change_c = CRUrelDeltaTmean,
+    mean_monthly_precip_mm = CRUmnPrec,
+    precip_change_mm = CRUrelDeltaPrec
+  ) %>% 
+  
+  # select cols we want
+  select(
+  Plot_ID, DataSource_ID, 
+  Latitude, Longitude, 
+  WWFecoRegion, ClimaticZone,
+  ProtectedArea, 
+  amt_cropland, amt_urban, amt_forest,
+  mean_temp_c, temp_change_c, 
+  mean_monthly_precip_mm, precip_change_mm
+  
+) %>% 
+  
+  # select for only unique rows, not including the ID
+  distinct(.[2:length(.)], .keep_all = TRUE)
+
+# join plot and sample data
+bug_range_data <- sample_data_trim %>% left_join(plot_trim, multiple = "any")
+```
+
+
+```{r}
+table_smry(bug_range_data)
+```
+
+
+```{r}
+
+# make list of keywords for habitat
+find_list = c(
+    "riparian", "marsh", "estuary", "wetlands", "bog", "lake",
+    "coastal", "wetland", "shrubland", "urban", "roadside", "field", "pasture", "garden",
+    "agricultural", "cultivated area", "saltmarsh", "restoration", "marshland", "wetland", 
+    "grassland", "meadow", "successional", "field", "savannah",
+    "oak", "woods", "woodland", "forest", "chaparral", "lawn",
+    "urban", "yard", "house", "garden", 
+    "road", "roadside", "fields", "gravel",
+    "graveyard", "grassland", "dunes", "vernel", "creek", "patch", "bog", "pond", "dock"
+)
+
+# get all habitat values in data set with those keywords
+search_these_habitat_vals <- big_bee %>% 
+  
+  # just unique habitat vals
+  select(habitat) %>% 
+  unique() %>%
+  
+  # for each row
+  rowwise %>% 
+  
+  # filter down list a bit more by taking only values with two or less words
+  filter(length(str_split(habitat, " ")[[1]]) <= 2) %>% 
+  ungroup() %>% 
+  
+  # get rid of non letter characters and make lowercase
+  mutate(habitat = str_replace_all(habitat, "[[:punct:]]", ""), 
+         habitat = tolower(habitat)) %>% 
+  
+  # filter for all values with keywords
+  filter(if_any(habitat, ~ str_detect(.x, paste(find_list, collapse = "|")))) %>% 
+  c()
+
+
+# big bee, name "bee_presence_and_traits"
+big_bee_trim <- big_bee %>% 
+  
+  # get rid of columns we don't want
+  select(
+    -institutionCode, 
+    -collectionCode, 
+    -ownerInstitutionCode, 
+    -basisOfRecord,
+    -higherClassification,
+    -kingdom,
+    -phylum,
+    -class,
+    -order,
+    -scientificNameAuthorship, 
+    -verbatimTaxonRank, 
+    -identifiedBy,
+    -identificationReferences,
+    -identificationRemarks,
+    -identificationQualifier, 
+    -typeStatus, 
+    -recordedBy, 
+    -year, 
+    -month, 
+    -day, 
+    -startDayOfYear, 
+    -endDayOfYear, 
+    -verbatimEventDate, 
+    -informationWithheld,
+    -dataGeneralizations,
+    -associatedOccurrences,
+    -associatedSequences,
+    -preparations,
+    
+    # all these have one unique val
+    -reproductiveCondition,
+    -waterBody,
+    -islandGroup,
+    -island,
+    -minimumDepthInMeters,
+    -maximumDepthInMeters, 
+    -verbatimDepth,
+    
+    # extra omits
+    -collectionID,
+    -occurrenceID,
+    -catalogNumber, 
+    -otherCatalogNumbers,
+    -taxonID,
+    -genus,
+    -taxonRemarks,
+    -recordNumber, 
+    -occurrenceRemarks,
+    -fieldNumber, 
+    -dynamicProperties, 
+    -lifeStage, 
+    -individualCount, 
+    -locationID, 
+    -continent, 
+    -county,
+    -municipality, 
+    -stateProvince, 
+    -locality,
+    -locationRemarks,
+    -geodeticDatum, 
+    -coordinateUncertaintyInMeters, 
+    -verbatimCoordinates, 
+    -georeferencedBy,
+    -georeferenceProtocol, 
+    -georeferenceSources, 
+    -georeferenceVerificationStatus, 
+    -georeferenceRemarks, 
+    -minimumElevationInMeters,
+    -maximumElevationInMeters,
+    -verbatimElevation, 
+    -disposition,
+    -language, 
+    -recordEnteredBy,
+    -rights,
+    -rightsHolder,
+    -accessRights,
+    -recordID,
+    -references
+  
+  
+) %>% 
+  
+  # filter for all habitat values we sourced originally
+  filter(
+    habitat %in% search_these_habitat_vals$habitat
+  ) %>% 
+  
+  # reclassify habitat values
+  mutate(
+    habitat = case_when(
+      if_any(habitat, ~ str_detect(.x, paste(c("garden", "meadow"), collapse = "|"))) ~ "pollinator_habitat",
+      if_any(habitat, ~ str_detect(.x, paste(c("riparian", "marsh", "estuary", "wetlands", "lake", "coastal", "wetland", "dock", "river", "creek"), collapse = "|"))) ~ "near_water", 
+      if_any(habitat, ~ str_detect(.x, paste(c("vernal", "bog", "pond"), collapse = "|"))) ~ "ephemeral_water_body",
+      if_any(habitat, ~ str_detect(.x, paste(c("shrubland", "grassland", "savannah", "dunes"), collapse = "|"))) ~ "arid_or_semiarid",
+      if_any(habitat, ~ str_detect(.x, paste(c("successional", "oak", "wood", "forest"), collapse = "|"))) ~ "forested", 
+      if_any(habitat, ~ str_detect(.x, paste(c("field", "pasture", "agricultural"), collapse = "|"))) ~ "agricultural", 
+      if_any(habitat, ~ str_detect(.x, paste(c("urban", "yard", "house", "lawn", "road", "gravel", "cultivated"), collapse = "|"))) ~ "manmade",
+      .default = habitat
+    )
+  ) %>% 
+  
+  # fix sex col
+  mutate(sex = case_when(
+    sex %in% c("Female", "Worker", "F", "W", "female", "female; female") ~ "female", 
+    sex %in% c("Male", "M", "male") ~ "male",
+    .default = sex
+    ), 
+    
+    # make whole num lat/lon to join on butterfly survey data
+    lat_whole = round(decimalLatitude),
+    lon_whole = round(decimalLongitude)
+  )
+```
+
+
+
+
+
+```{r}
+table_smry(big_bee_trim)
+```
+
+
+
+```{r}
+# butterfly survey data, call "butterfly_species_presence"
+complete_share_trim <- complete_share %>% 
+  select(
+    -program,
+    -`lat-lon precision`,
+    -duration, 
+    -party.size, 
+    -party.minutes, 
+    -site,
+    -event.id
+  
+) %>% 
+  
+  # fix cols we don't want to be NA
+  filter(!is.na(lat) | !is.na(lon),
+         !is.na(region), 
+         !is.na(state)
+         )
+```
+
+
+```{r}
+table_smry(complete_share_trim)
+```
+
+
+
+```{r}
+
+# butterfly traits df will require more complex trimming
+
+# declare multiplication values
+mults <- c(1:12)
+
+# butterfly traits df, call "butterfly_traits"
+butter_traits_trim <- butter_traits %>%
+  
+  # delete any rows with missing season data
+  filter(if_any(Jan:Dec, ~ !is.na(.))) %>%
+  
+  mutate(
+    
+    # for every month
+    across(
+      Jan:Dec, 
+      
+      # multiply each month by their number (1 - 12), months with 0 will be 0
+      ~ .x * mults[which(names(butter_traits[24:35]) == cur_column())]
+      
+      
+      )
+  ) %>% 
+  mutate(
+    
+    # for every month (again)
+    across(
+      Jan:Dec, 
+      
+      # NA 0 months so they don't mess up min calculation
+        ~ ifelse(.x == 0, NA, .x)
+    )
+  ) %>% 
+  
+  # make rowwise so we can use min across each row individually
+  rowwise() %>% 
+  
+  mutate(
+    
+    # get min and max month for each butterfly species
+    earliest_month = min(c_across(Jan:Dec), na.rm = TRUE),
+    latest_month = max(c_across(Jan:Dec), na.rm = TRUE)
+  ) %>% 
+  
+  # disable rowwise
+  ungroup() %>% 
+  
+  # fix inf outputs by min and max
+  mutate(
+    across(
+      earliest_month:latest_month,
+      ~ ifelse(is.infinite(.x), NA, .x)
+    )
+  ) %>%
+  
+  # note if a species is not active during one or more of the middle months
+  mutate(
+    bimodality = ifelse(latest_month - earliest_month + 1 == Duration, 0, 1)
+  ) %>% 
+  
+  # remove unwanted cols
+  select(
+    -Book, 
+    -ResourceID, 
+    -PageNumber,
+    -(Jan:Dec)
+  ) %>% 
+  
+  # and fix cols we don't want to be NA
+  filter(!is.na(Genus), !is.na(Species)) %>% 
+  
+  select(-...1)
+
+
+```
+
+
+```{r}
+table_smry(butter_traits_trim)
+```
+
+
