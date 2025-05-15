@@ -1,0 +1,58 @@
+---
+title: "eds_213_viz"
+author: "Joshua Paul Cohen"
+format: html
+---
+
+```{r}
+library(tidyverse)
+library(duckdb)
+library(dbplyr)
+```
+
+
+
+
+### Init duckdb
+```{r}
+con <- dbConnect(duckdb(), dbdir = "bugs.duckdb", read_only = FALSE)
+```
+
+```{r}
+dbGetQuery(con, "SHOW TABLES")
+```
+
+
+
+
+```{r}
+  butterfly_df <- dbGetQuery(con, "SELECT * FROM yearly_butterfly_species_params")
+```
+
+```{r}
+usmap::plot_usmap(data = butterfly_df)# + 
+  # geom_point(data = butterfly_df, mapping = aes(lon, lat), size = 5)
+```
+
+
+
+```{r}
+butterfly_df %>%
+  mutate(Moisture = case_when(
+    Moisture %in% c('DW', 'WD', 'WUD') ~ 'Both', 
+    Moisture %in% c('W', 'UW', 'WU') ~ 'Wet Habitat',
+    Moisture %in% c('D', 'DU', 'UD') ~ 'Dry Habitat', 
+    .default = NA
+  )) %>% 
+  filter(!is.na(Moisture)) %>% 
+ggplot(aes(lon, lat, color = Moisture)) + 
+  geom_point() + 
+  scale_color_manual(values = c("yellow", "brown", "blue")) + 
+  facet_wrap(~obs_year)
+```
+
+
+
+```{r}
+dbDisconnect(con, shutdown = TRUE)
+```

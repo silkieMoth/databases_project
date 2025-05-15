@@ -5,6 +5,8 @@ format: html
 
 ```{r}
 library(tidyverse)
+library(duckdb)
+library(dbplyr)
 
 root <- "C:/Users/Silkie Moth/Desktop/ucsb_stuff/homework/eds_213/section"
 
@@ -381,4 +383,31 @@ butter_traits_trim <- butter_traits %>%
 table_smry(butter_traits_trim)
 ```
 
+### Init duckdb
+```{r}
+con <- dbConnect(duckdb(), dbdir = "bugs.duckdb", read_only = FALSE)
+```
+
+```{r}
+dbWriteTable(con, "bug_range_change", bug_range_data, overwrite = TRUE)
+dbWriteTable(con, "bee_presence_and_traits", big_bee_trim, overwrite = TRUE)
+dbWriteTable(con, "butterfly_species_presence", complete_share_trim, overwrite = TRUE)
+dbWriteTable(con, "butterfly_traits", butter_traits_trim, overwrite = TRUE)
+```
+```{r}
+table_nms <- c('bug_range_change', 'bee_presence_and_traits', 'butterfly_species_presence', 'butterfly_traits')
+```
+
+
+```{r}
+for (table in table_nms){
+  print(dbGetQuery(con, paste("DESCRIBE", table)))
+}
+```
+
+```{r}
+for (table in table_nms){
+  print(dbGetQuery(con, paste("SELECT * FROM", table)))
+}
+```
 
