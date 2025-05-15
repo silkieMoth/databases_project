@@ -1,3 +1,9 @@
+# added files
+data/
+notes.txt
+section_do_over.qmd
+section_proj_raw.qmd
+
 # History files
 .Rhistory
 .Rapp.history
