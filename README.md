@@ -1,6 +1,6 @@
 # How Spider Traits Differ Across the World
 
-![](spider_on_earth.png){fig-alt="A spider casting a shadow over the earth."}
+![A spider casting a shadow over the earth.](spider_on_earth.png)
 
 ## Description
 This repo contains all files for completing the cross dataset ingestion and visualization project as was a requirement for EDS 213: Databases and Data Management as part of the Masters of Environmental Data Science program with the Bren School of Environmental Science and Management at UCSB.
