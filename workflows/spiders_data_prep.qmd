@@ -1,0 +1,432 @@
+---
+title: "api_test"
+format: html
+---
+
+## declare libraries and functions
+```{r}
+library(tidyverse)
+library(arakno)
+library(sf)
+library(tmap)
+
+
+get_mode <- function(x) {
+  u <- unique(x)
+  tab <- tabulate(match(x, u))
+  u[tab == max(tab)]
+}
+```
+
+
+## get all species in world spider catalog
+
+### make list of families in dataset
+```{r}
+families = c("Agelenidae", "Anamidae", "Anapidae", "Anyphaenidae", "Araneidae", "Archaeidae", "Atracidae", "Atypidae", "Austrochilidae", "Barychelidae", "Bemmeridae", "Caponiidae", "Cheiracanthiidae", "Cithaeronidae", "Clubionidae", "Corinnidae", "Ctenidae", "Ctenizidae", "Cyatholipidae", "Cybaeidae", "Cycloctenidae", "Cyrtaucheniidae", "Deinopidae", "Desidae", "Dictynidae", "Diguetidae", "Drymusidae", "Dysderidae", "Entypesidae", "Eresidae", "Euagridae", "Euctenizidae", "Filistatidae", "Gallieniellidae", "Gnaphosidae", "Gradungulidae", "Hahniidae", "Halonoproctidae", "Hersiliidae", "Hexathelidae", "Homalonychidae", "Huttoniidae", "Hypochilidae", "Idiopidae", "Ischnothelidae", "Lamponidae", "Leptonetidae", "Linyphiidae","Linyphiidae","Linyphiidae","Linyphiidae", "Liocranidae", "Lycosidae", "Malkaridae", "Mecicobothriidae", "Mecysmaucheniidae", "Megadictynidae", "Microstigmatidae", "Migidae", "Mimetidae", "Miturgidae", "Mysmenidae", "Nemesiidae", "Nesticidae", "Ochyroceratidae", "Oecobiidae", "Oonopidae", "Orsolobidae", "Oxyopidae", "Pacullidae", "Palpimanidae", "Paratropididae", "Penestomidae", "Periegopidae", "Philodromidae", "Pholcidae", "Phrurolithidae", "Physoglenidae", "Phyxelididae", "Pisauridae", "Plectreuridae", "Psechridae", "Psilodercidae", "Pycnothelidae", "Scytodidae", "Segestriidae", "Selenopidae", "Sicariidae", "Sparassidae", "Stenochilidae", "Stiphidiidae", "Symphytognathidae", "Synaphridae", "Telemidae", "Tetrablemmidae", "Tetragnathidae", "Theraphosidae", "Theridiidae", "Theridiosomatidae", "Titanoecidae", "Toxopidae", "Trachelidae", "Trechaleidae", "Trochanteriidae", "Trogloraptoridae", "Udubidae", "Uloboridae", "Viridasiidae","Xenoctenidae", "Zodariidae", "Zoropsidae")
+```
+
+### ping the api and put all species into a df
+```{r}
+all_species <- data.frame(species(families)) %>% rename(species = species.families.) 
+```
+
+### fix or filter out species names that can't be read by api
+```{r}
+all_species_filt <- all_species %>% 
+  mutate(
+    
+    # get word could for all latin names
+    word_count = stringi::stri_count_words(species),
+    
+    # trim this one
+    species = ifelse(
+      species == 'Lycosa hispanica dufouri', 
+      'Lycosa hispanica', species
+      )
+    ) %>% 
+  
+  # remove the rest of them that include some epithet beyond species
+  filter(word_count < 3)
+```
+
+# get selected traits for every species in dataset
+```{r}
+print(cat("This code chunk pings the World Spider Catalog API,\nand fetches spider trait data for every species.\nIt takes hours to run, and you will overwrite the dataframe already stored."))
+input = readline(prompt = "Continue? (yes/no): ")
+
+
+if (input == "yes"){
+
+  # make empty data frame and list to hold species that errored out
+  all_traits <- data.frame(matrix(ncol = 48, nrow = 0))
+  error_list <- list()
+  
+  # counter for printing every 200 species
+  print_counter <- 1
+  
+  # we do tryCatch to allow species to error without disrupting the loop
+  for (species in all_species_filt$species){
+    tryCatch(
+      {
+        # increment the counter 
+        print_counter <- print_counter + 1
+        
+        # and print the species every 200
+        if (print_counter %% 200 == 0){
+          print(paste("Current Index:", print_counter))
+          print(paste("Current Species:", species))
+        }
+        
+        # ping api for given species traits
+        curr_spider_traits <- traits(species, 
+                                     verbose = FALSE,
+                                     trait = c(
+                                       "bole", # body length
+                                       "ld50", # venom toxicity
+                                       "webb", # web building
+                                       "retr", # retreat
+                                       "cele", # cephalothorax length
+                                       "cewe", # cephalothorax width
+                                       "cehe", # cephalothorax height
+                                       "fale", # fang length
+                                       "vgsi", # venom gland size
+                                       "strt", # stratum
+                                       "circ" # circadian activity
+                                        )
+                                     )
+        
+        # skip to next species if nothing is returned
+        if(length(curr_spider_traits) == 1 && curr_spider_traits == "No results found!") next
+        
+        # append to the df if something does come back
+        all_traits = all_traits %>% rbind(curr_spider_traits)
+      
+      
+      },
+      
+      # if error, print error and append said species to list
+      error = function(e) {
+        message(paste('Some error happened at this spider:', species))
+        message(paste('Error in question:', e))
+        
+        error_list <<- append(error_list, species)
+      }
+    )
+  }
+
+  
+  print("____execution completed____")
+  
+} else{
+  print("____execution cancelled____")
+}
+```
+
+```{r}
+
+# read traits csv based off api ping above if necessary
+if (!exists("all_traits")){
+  all_traits <- read_csv("spider_traits.csv")
+}
+
+# a lot of data in world spider catalog requires authorization that I don't have
+## which is why there are a lot of NAs
+test <- all_traits %>% filter(!is.na(value))
+print(nrow(all_traits)) # 71547 entries
+nrow(test) # 45284 entries
+#length(error_list) # 174 species omitted from dataset due to error
+```
+
+
+
+```{r}
+print(cat("Overwrite the spider traits csv?"))
+input = readline(prompt = "Continue? (yes/no): ")
+
+
+if (input == "yes"){
+  
+  # save spider traits csv
+  write.csv(all_traits, 'spider_traits.csv')
+
+  print("____execution completed____")
+  
+} else{
+  print("____execution cancelled____")
+}
+```
+
+
+
+## Clean data spider data
+```{r}
+# pre filtering
+all_traits_prefil <- all_traits %>% 
+  
+  # remove trait values with NAs (mostly restricted data)
+  filter(!is.na(value)) %>%
+  
+  # select cols of interest
+  select(id, originalName, value, sampleSize, note, rowLink, taxonomy.family, trait.abbrev, trait.name, measure.name, sex.name, country.name, location.coords.lat, location.coords.lon) %>% 
+  
+  # rename cols
+  `colnames<-`(c('id', 'latin_name', 'value', 'sample_size', 'note', 'row_code', 'family', 'trait_abbrev', 'trait', 'measure_type', 'sex', 'country', 'lat', 'lon'))
+```
+
+
+## load countries and ecoregions data
+```{r}
+# load and fix polys
+countries_shp <- read_sf("data/geoBoundariesCGAZ_ADM0/geoBoundariesCGAZ_ADM0.shp") %>% 
+  st_make_valid() %>% 
+  mutate(
+    
+    # calculate area
+    country_area = st_area(geometry) %>%
+      units::set_units(km^2)
+    )
+
+# load ecoregions (for biomes) and fix polygons
+ecoregions <- read_sf("data/Terrestrial Ecoregions of the World/data/commondata/data0/wwf_terr_ecos.shp") %>% 
+  st_make_valid()
+
+# construct grid of points over the world map
+point_grid <- SpatialPosition::CreateGrid(countries_shp, returnclass = "sf")
+```
+
+
+### clean and  filter ecoregions
+```{r}
+# match crs ecoregion crs with the country boundary shapefile
+ecoregions <- st_transform(ecoregions, st_crs(countries_shp))
+
+# union biomes together
+ecoregions_union <- ecoregions %>% 
+  
+  # biomes have about 14 categories, which is not too much/little for our analysis
+  group_by(BIOME) %>% 
+  
+  # union all biomes together
+  summarize(biome_area = sum(AREA), geometry = st_union(geometry), 
+            realm = get_mode(REALM_1)) %>%
+  ungroup() %>%
+  
+  # include the full biome names in new col
+  mutate(biome_nm = case_when(
+          BIOME == 1 ~ "Tropical & Subtropical Moist Broadleaf Forests",
+          BIOME == 2 ~ "Tropical & Subtropical Dry Broadleaf Forests",
+          BIOME == 3 ~ "Tropical & Subtropical Coniferous Forests",
+          BIOME == 4 ~ "Temperate Broadleaf & Mixed Forests",
+          BIOME == 5 ~ "Temperate Conifer Forests",
+          BIOME == 6 ~ "Boreal Forests/Taiga",
+          BIOME == 7 ~ "Tropical & Subtropical Grasslands, Savannas & Shrublands",
+          BIOME == 8 ~ "Temperate Grasslands, Savannas & Shrublands",
+          BIOME == 9 ~ "Flooded Grasslands & Savannas",
+          BIOME == 10 ~ "Montane Grasslands & Shrublands",
+          BIOME == 11 ~ "Tundra",
+          BIOME == 12 ~ "Mediterranean Forests, Woodlands & Scrub",
+          BIOME == 13 ~ "Deserts & Xeric Shrublands",
+          BIOME == 14 ~ "Mangroves",
+          )
+        )
+
+# convert it to a df and get rid of undetermined biome vals
+ecoregions_final <- ecoregions_union %>% 
+  st_drop_geometry() %>% 
+  filter(!BIOME %in% c(98,99))
+
+# write out the csv
+write_csv(ecoregions_final, "spider_ver_tables/ecoregions.csv")
+```
+
+
+### clean and filter country boundaries and export traits
+```{r}
+
+# case when object to align country names in country boundaries and world spider catalog datasets
+country_case_when <- function(value){
+  
+  case_when(
+  grepl("Congo", value) ~ "Congo", 
+  grepl("Bolivia", value) ~ "Bolivia",
+  grepl("Guiana", value) ~ "Guiana",
+  grepl("Polynesia", value) ~ "Polynesia", 
+  grepl("Iran", value) ~ "Iran", 
+  value == "Korea, Republic of" | value == "Korea, South" ~ "South Korea", 
+  value == "Lao People's Democratic Republic" ~ "Laos", 
+  grepl("Moldova", value) ~ "Moldova", 
+  grepl("Myanmar", value) ~ "Myanmar", 
+  grepl("Macedonia", value) ~ "Macedonia",
+  value == "Russian Federation" ~ "Russia",
+  grepl("Sao Tome", value) ~ "Sao Tome & Principe",
+  grepl("Solomon", value) ~ "Solomon Islands",
+  grepl("Syria", value) ~ "Syria", 
+  grepl("Taiwan", value) ~ "Taiwan", 
+  grepl("Tanzania", value) ~ "Tanzania", 
+  grepl("Trinidad", value) ~ "Trinidad & Tobago",
+  grepl("United Kingdom", value) | grepl("Virgin Islands", value) ~ "United Kingdom", 
+  grepl("United States", value) ~ "United States", 
+  grepl("Venezuela", value) ~ "Venezuela", 
+  grepl("Viet Nam", value) ~ "Vietnam",
+  grepl("Bahamas", value) ~ "Bahamas",
+  value == "Barbados" | value == "St Lucia" ~ "Bahamas",
+  grepl("Gambia", value) ~ "Gambia", 
+  grepl("d'Ivoire", value) ~ "Ivory Coast",
+  grepl("Gaza Strip", value) ~ "Israel",
+  grepl("Bosnia", value) ~ "Bosnia and Herzegovina",
+  grepl("Guinea", value) ~ "Guinea",
+  .default = value
+  )
+}
+```
+
+
+```{r}
+all_traits_final <- all_traits_prefil %>% 
+  
+  # apply country name fix to traits dataset
+  mutate(country = country_case_when(country)) %>% 
+  
+  # filter out any NAs from it and unecessary column
+  filter(!is.na(country)) %>% 
+  select(-trait_abbrev)
+
+# do the same with the country boundaries
+countries_shp_cor <- countries_shp %>% 
+  mutate(shapeName = country_case_when(shapeName)) %>% 
+  filter(!is.na(shapeName))
+
+
+# # get list of all countries (that can join)
+# all_countries <- all_traits_final %>% distinct(country) %>% inner_join(countries_shp_cor %>% distinct(shapeName), by = join_by(country == shapeName))
+```
+
+
+### join the countries to the ecoregions using the point grid
+We use this method to get a more accurate calculation of how much of a particular ecoregion is in a given country
+```{r}
+# join points to biome
+ecoregion_points <- point_grid %>% 
+  st_join(ecoregions_union) %>% 
+  filter(!is.na(BIOME))
+
+# then join the pointy biomes to the countries
+country_biome_points <- countries_shp_cor %>% 
+  st_join(ecoregion_points)
+```
+
+```{r}
+# get total points per biome
+ecoregion_points_stats <- ecoregion_points %>% 
+  count(BIOME) %>% # count points
+  na.omit(n) %>% # omit biomes with 0 points
+  as_tibble()
+
+
+# calculate points per biome for each country, attach total biome points, calculate area of biome per country
+country_eco_pts_stats <- country_biome_points %>% 
+  
+  # for each country in each biome
+  group_by(shapeName, BIOME) %>% 
+  
+  # get count of points associated with each biome, for each country
+  mutate(point_cnt = n()) %>% ungroup() %>% 
+  
+  # join the actual ecoregions dataset, to join area of biomes
+  left_join(ecoregion_points_stats, by = join_by(BIOME)) %>% 
+  
+  # calculate area of biomes in each country by numer of points per biome
+  mutate(biome_area_country = biome_area * (point_cnt/n)) %>%
+  
+  # convert to df
+  st_drop_geometry() #%>% 
+  # group_by(shapeName, BIOME, biome_area_country) %>% summarize() %>% ungroup() %>% 
+  # rename(country = shapeName, biome = BIOME)
+```
+
+
+### join remaining countries
+```{r}
+# not all countries are joined with this method, so we try here to join some of them directly
+## get all countries with NA biomes
+strays <- country_eco_pts_stats %>% 
+  filter(is.na(BIOME)) %>% 
+  select(shapeName)
+
+
+strays_attach <- strays %>% 
+  
+  # attach these to the country boundaries and make it geospatial
+  inner_join(countries_shp, by = join_by(shapeName)) %>% 
+  st_as_sf() %>% 
+  
+  # then join them with a simple polygon on polygon intersect
+  st_join(ecoregions_union) %>% 
+  
+  # to df and clean
+  st_drop_geometry() %>% 
+  select(shapeName, country_area, BIOME, biome_area)
+
+
+# then attach the stray countries to the df with the calculated stats
+pre_countries_table <- country_eco_pts_stats %>% 
+  
+  # attach countries by name
+  full_join(strays_attach, by = c("shapeName")) %>% 
+  
+  # fill in the NAs in the main biome cols
+  mutate(BIOME.x = ifelse(is.na(BIOME.x), BIOME.y, BIOME.x), 
+         biome_area.x = ifelse(is.na(biome_area.x), biome_area.y, biome_area.x)) %>% 
+  
+  # for rows containing the strays, grab the biome area from other rows
+  group_by(BIOME.x) %>%
+  mutate(n = ifelse(is.na(n), first(na.omit(n)), n)) %>%
+  ungroup() %>%
+  
+  # calculate the areas for each biome within countries
+  mutate(biome_area_country = ifelse(is.na(biome_area_country), biome_area.x * (point_cnt/n), biome_area_country)) %>%
+
+  # df and cut down to grouped columns
+  st_drop_geometry() %>%
+  group_by(shapeName, BIOME.x, biome_area_country) %>% 
+  summarize() %>% 
+  ungroup() %>%
+  
+  # rename and regroup
+  rename(country = shapeName, biome = BIOME.x)
+
+pre_countries_table 
+```
+
+
+### create final countries table
+```{r}
+# countries table to be saved
+
+final_countries_table <- pre_countries_table %>% 
+  
+  # for each country
+  group_by(country) %>% 
+  summarize(
+    
+    # grab the most dominant biome and it's area
+    most_dominant_biome = biome[which.max(biome_area_country)], 
+    most_dominant_biome_area = biome_area_country[which.max(biome_area_country)], 
+    
+    # and do the same thing for the second and third most dominant biomes
+    second_dominant_biome = dplyr::nth(biome[order(-biome_area_country)], 2, default = NA),
+    second_dominant_biome_area = dplyr::nth(biome_area_country[order(-biome_area_country)], 2, default = NA),
+    third_dominant_biome = dplyr::nth(biome[order(-biome_area_country)], 3, default = NA),
+    third_dominant_biome_area = dplyr::nth(biome_area_country[order(-biome_area_country)], 3, default = NA)
+  )
+final_countries_table
+```
+
+
+## Write out country boundaries and spider species traits datasets
+```{r}
+write_csv(final_countries_table, "spider_ver_tables/countries.csv")
+write_csv(all_traits_final, "spider_ver_tables/full_spider_traits.csv")
+```
+

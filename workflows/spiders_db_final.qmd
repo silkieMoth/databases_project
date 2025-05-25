@@ -1,0 +1,171 @@
+---
+title: "spiders_db"
+author: "Joshua Paul Cohen"
+format: html
+---
+
+## init packages and duckdb
+
+```{r}
+# declare libraries
+library(tidyverse)
+library(duckdb)
+library(patchwork)
+
+# function to compute mode
+get_mode <- function(x) {
+  u <- unique(x)
+  tab <- tabulate(match(x, u))
+  u[tab == max(tab)]
+}
+
+# functions to insert a substring into a string after a given number of words
+insert_after_n_words <- function(text, insert, n) {
+  sub(paste0("((\\S+\\s+){", n, "})"), paste0("\\1", insert, " "), text)
+}
+
+# establish connection with the database
+con <- dbConnect(duckdb(), dbdir = "spiders.duckdb", read_only = FALSE)
+```
+
+
+### fetch spider query table
+```{r}
+# get the full query
+spiders_query <- dbGetQuery(con, "SELECT * FROM spiders_query")
+```
+
+
+## Plotting
+
+### Build the plot making function
+```{r}
+# build the plot making function
+make_plot <- function(df, curr_variable, unit, group_vars = c("biome_name", "trait"), x_col = "avg_numeric_value"){
+  
+  final_plot <- df %>% 
+    
+    # unpack the given grouping variables 
+    group_by(!!!syms(group_vars)) %>% 
+    
+    # aggregate our trait values, both continuous and categorical
+    reframe(avg_numeric_value = mean(avg_numeric_value), 
+              most_common_categorical_value = get_mode(most_common_categorical_value)) %>% 
+    
+    # filter for our target trait
+    filter(trait == curr_variable) %>% 
+    
+    # at \n's to our biome names, so they fit into the graph better
+    mutate(!!sym(group_vars[1]) := case_when(
+      stringi::stri_count_words(!!sym(group_vars[1])) %% 3 %in% c(0) ~ insert_after_n_words(!!sym(group_vars[1]), '\n', 3), 
+      stringi::stri_count_words(!!sym(group_vars[1])) %% 2 %in% c(0) ~ insert_after_n_words(!!sym(group_vars[1]), '\n', 2),
+      .default = insert_after_n_words(!!sym(group_vars[1]), '\n', 4)
+      )
+    ) %>%
+    
+    # begin plotmaking
+    ggplot(
+      aes(
+        
+        # plot the biomes, sort by the parameter values
+        fct_reorder(!!sym(group_vars[1]), get(x_col), .desc = TRUE), get(x_col))) + 
+    
+    # horizontal bar plot
+    geom_col() +
+    coord_flip() +
+    
+    # fix labels
+    labs(
+      y = paste0(curr_variable," (", unit, ")"), 
+      title = curr_variable
+         ) +
+    
+    # fix other aesthetic elements
+    theme(axis.text.y = element_text(size = 11),
+          panel.background = element_blank(),
+          axis.title.y = element_blank(), 
+          plot.title = element_text(hjust = 0.5, size = 20), 
+          axis.title.x = element_text(size = 15)
+          )
+
+  return(final_plot)
+
+}
+```
+
+
+### Declare every plot variable for every trait
+```{r}
+
+# create vars for plots, for each trait dynamically
+for (var in spiders_query$trait %>% unique()){
+  
+  # venom toxicity only trait that doesn't have unit cm
+  if (var == 'Venom toxicity'){
+    
+    # so we call the function wihth unit LD50
+    assign(paste0("graph_", stringr::str_replace_all(var, " ", "_")) %>% tolower(), make_plot(spiders_query, var, "LD50"))
+    
+  # the rest of the traits can get visualized with unit cm
+  } else {
+    assign(paste0("graph_", stringr::str_replace_all(var, " ", "_")) %>% tolower(), make_plot(spiders_query, var, "cm"))
+  }
+}
+```
+
+
+
+
+### create the patchwork visualization
+```{r, fig.width = 20, fig.asp = 0.9}
+
+# wrap elements preserves aesthetics locally to a particular patchwork variables, so it can be appended to another patchwork without losing said aesthetics (see below)
+size_plots <- wrap_elements(
+  
+  # put all size related traits on a single plot
+  (graph_body_length + graph_fang_length + plot_layout(nrow = 1)) / 
+(graph_cephalothorax_length + graph_cephalothorax_height + graph_cephalothorax_width + plot_layout(nrow = 1)) + 
+  
+  # and label it
+  plot_annotation(
+  subtitle = "Size Traits", 
+  theme = theme(plot.subtitle = element_text(size = 40, hjust = 0.5))
+  )
+)
+
+# same thing for the venom related traits
+venom_plots <- wrap_elements(
+  
+  # nrow limits/specifies the number of rows on a given patchwork plot
+  (graph_venom_gland_size + graph_venom_toxicity + plot_layout(nrow = 1)) + 
+  plot_annotation(
+  subtitle = "Venom Traits", 
+  theme = theme(plot.subtitle = element_text(size = 40, hjust = 0.5))
+  )
+)
+```
+
+
+```{r}
+
+# append both patchwork plots vertically
+final_patch <- size_plots / venom_plots + 
+  
+  # include any remaining annotation elements
+    plot_annotation(
+    title = "Spider Trait Trends Around the Worlds Biomes",
+    caption = "Note: Data bias present. Visualizations based on available data.", 
+    theme = theme(plot.title = element_text(size = 50, hjust = 0.5))
+  )
+
+# and save off the patchwork as a png
+ggsave("final_viz.png", width = 20, height = 25)
+```
+
+
+
+### disconnect from the database
+```{r}
+dbDisconnect(con, shutdown = TRUE)
+```
+
