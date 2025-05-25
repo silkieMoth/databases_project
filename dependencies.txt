@@ -1,0 +1,15 @@
+sf
+arakno
+patchwork
+duckdb
+DBI
+lubridate
+forcats
+stringr
+dplyr
+purrr
+readr
+tidyr
+tibble
+ggplot2
+tidyverse
