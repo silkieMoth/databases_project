@@ -127,8 +127,9 @@ if (input == "yes"){
 
 # read traits csv based off api ping above if necessary
 if (!exists("all_traits")){
-  all_traits <- read_csv("spider_traits.csv")
+  all_traits <- read_csv("../spider_ver_tables/spider_traits.csv")
 }
+
 
 # a lot of data in world spider catalog requires authorization that I don't have
 ## which is why there are a lot of NAs
@@ -136,12 +137,13 @@ test <- all_traits %>% filter(!is.na(value))
 print(nrow(all_traits)) # 71547 entries
 nrow(test) # 45284 entries
 #length(error_list) # 174 species omitted from dataset due to error
+
 ```
 
 
 
 ```{r}
-print(cat("Overwrite the spider traits csv?"))
+print("Overwrite the spider traits csv?")
 input = readline(prompt = "Continue? (yes/no): ")
 
 
@@ -178,7 +180,7 @@ all_traits_prefil <- all_traits %>%
 ## load countries and ecoregions data
 ```{r}
 # load and fix polys
-countries_shp <- read_sf("data/geoBoundariesCGAZ_ADM0/geoBoundariesCGAZ_ADM0.shp") %>% 
+countries_shp <- read_sf("../data/geoBoundariesCGAZ_ADM0/geoBoundariesCGAZ_ADM0.shp") %>% 
   st_make_valid() %>% 
   mutate(
     
@@ -188,7 +190,7 @@ countries_shp <- read_sf("data/geoBoundariesCGAZ_ADM0/geoBoundariesCGAZ_ADM0.shp
     )
 
 # load ecoregions (for biomes) and fix polygons
-ecoregions <- read_sf("data/Terrestrial Ecoregions of the World/data/commondata/data0/wwf_terr_ecos.shp") %>% 
+ecoregions <- read_sf("../data/Terrestrial Ecoregions of the World/data/commondata/data0/wwf_terr_ecos.shp") %>% 
   st_make_valid()
 
 # construct grid of points over the world map
@@ -236,8 +238,18 @@ ecoregions_final <- ecoregions_union %>%
   st_drop_geometry() %>% 
   filter(!BIOME %in% c(98,99))
 
-# write out the csv
-write_csv(ecoregions_final, "spider_ver_tables/ecoregions.csv")
+
+print("Overwrite the ecoregions.csv?")
+input = readline(prompt = "Continue? (yes/no): ")
+
+if (input == "yes"){
+  
+  # write out the csv
+  write_csv(ecoregions_final, "spider_ver_tables/ecoregions.csv")
+  
+} else{
+  print("____execution cancelled____")
+}
 ```
 
 
@@ -340,9 +352,7 @@ country_eco_pts_stats <- country_biome_points %>%
   mutate(biome_area_country = biome_area * (point_cnt/n)) %>%
   
   # convert to df
-  st_drop_geometry() #%>% 
-  # group_by(shapeName, BIOME, biome_area_country) %>% summarize() %>% ungroup() %>% 
-  # rename(country = shapeName, biome = BIOME)
+  st_drop_geometry()
 ```
 
 
@@ -426,7 +436,17 @@ final_countries_table
 
 ## Write out country boundaries and spider species traits datasets
 ```{r}
-write_csv(final_countries_table, "spider_ver_tables/countries.csv")
-write_csv(all_traits_final, "spider_ver_tables/full_spider_traits.csv")
+print(cat("Overwrite the countries and full_spider_traits csvs?"))
+input = readline(prompt = "Continue? (yes/no): ")
+
+
+if (input == "yes"){
+
+  write_csv(final_countries_table, "spider_ver_tables/countries.csv")
+  write_csv(all_traits_final, "spider_ver_tables/full_spider_traits.csv")
+  
+} else{
+  print("____execution cancelled____")
+}
 ```
 

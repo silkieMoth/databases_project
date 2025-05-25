@@ -25,7 +25,7 @@ insert_after_n_words <- function(text, insert, n) {
 }
 
 # establish connection with the database
-con <- dbConnect(duckdb(), dbdir = "spiders.duckdb", read_only = FALSE)
+con <- dbConnect(duckdb(), dbdir = "../databases_n_sqls/spiders.duckdb", read_only = FALSE)
 ```
 
 
@@ -157,9 +157,20 @@ final_patch <- size_plots / venom_plots +
     caption = "Note: Data bias present. Visualizations based on available data.", 
     theme = theme(plot.title = element_text(size = 50, hjust = 0.5))
   )
+```
 
-# and save off the patchwork as a png
-ggsave("final_viz.png", width = 20, height = 25)
+```{r}
+print(cat("Overwrite final visualization?"))
+input = readline(prompt = "Continue? (yes/no): ")
+
+
+if (input == "yes"){
+  # and save off the patchwork as a png
+  ggsave("final_viz.png", width = 20, height = 25)
+  
+} else{
+  print("____execution cancelled____")
+}
 ```
 
 
