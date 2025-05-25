@@ -436,7 +436,7 @@ final_countries_table
 
 ## Write out country boundaries and spider species traits datasets
 ```{r}
-print(cat("Overwrite the countries and full_spider_traits csvs?"))
+print("Overwrite the countries and full_spider_traits csvs?")
 input = readline(prompt = "Continue? (yes/no): ")
 
 
