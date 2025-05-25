@@ -48,7 +48,10 @@ butterfly_df %>%
 ggplot(aes(lon, lat, color = Moisture)) + 
   geom_point() + 
   scale_color_manual(values = c("yellow", "brown", "blue")) + 
-  facet_wrap(~obs_year)
+  facet_wrap(~obs_year) + 
+  labs(title = "Species associations with moisture around the US by year____")
+
+ggsave("myplot.png")
 ```
 
 

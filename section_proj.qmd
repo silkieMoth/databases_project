@@ -63,7 +63,10 @@ sample_data_trim <- sample_data %>%
     SamplingMethod,
     Stratum, 
     GroupInData
-)
+) %>% 
+  mutate(
+    GroupInData = tolower(GroupInData)
+    )
 
 # will likely only need for lat longs and other plot parameter data
 plot_trim <- plot %>% 
@@ -409,5 +412,9 @@ for (table in table_nms){
 for (table in table_nms){
   print(dbGetQuery(con, paste("SELECT * FROM", table)))
 }
+```
+
+```{r}
+dbDisconnect(con, shutdown = TRUE)
 ```
 
